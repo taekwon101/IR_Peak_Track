@@ -56,7 +56,7 @@ index_low = 0
 for item in WN_array:
     if item < WN_low:
         index_low += 1
-        
+   
 index_high = 0
 for item in WN_array:
     if item < WN_high:
@@ -104,7 +104,8 @@ for file in filelist:
         baseline_y = np.array(m*WN_array[index_low:index_high] + b)
         baseline_area = simps(baseline_y, WN_array[index_low:index_high])
         areaarray.append(area - baseline_area)
-        
+
+# create scatterplot
 if plotScatter == True:
     plt.ylim((ymin, ymax))
     plt.xlim((xmin, xmax))
@@ -113,7 +114,8 @@ if plotScatter == True:
     y_label = 'absorbance (normalized)'
     plt.ylabel(y_label)
     plt.legend()
-    
+
+# create bar graph
 if plotScatter == False:
     #areaarray -= areaarray[0] # bandaid for too broad a y scale when all values are similar
     plt.ylim((20, 160))
@@ -122,5 +124,6 @@ if plotScatter == False:
     plt.ylabel(y_label)
     plt.xticks(rotation = 45)
 
+# universal plot formatting and show plot
 plt.title(os.path.basename(os.path.normpath(readpath))) # uses folder name as plot title
 plt.show()
