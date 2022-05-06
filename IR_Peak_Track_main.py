@@ -7,36 +7,60 @@ from scipy.integrate import simps
 import glob, os
 
 # assign file paths/names
-readpath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\220428_cbPDMS_3A_5e-4'
-writepath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\Output'
-output = '220317_5e7 cbPDMS_laser 10A oven 100C_abstest.csv'
-willExport = False
+readpath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\220504_808nm_5A_5e-5cbPDMS'
+writepath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\Output\220504_808nm_5A_5e-5cbPDMS.csv'
+output = '220504_808nm_5A_5e-5cbPDMS.csv'
+willExport = True
 
 os.chdir(readpath) #change working directory to folder with CSVs of interest
 filelist = sorted(glob.glob('*.csv')) #make list of names of csvs from readpath directory  
 
 # normalization and baseline correction wavenumbers
 WN_normal_CH = 2960
+WN_normal_CH_high = 3000
 WN_baseline_low = 3400 
 WN_baseline_high = 3600
 
-# wavenumber range to integrate over for bar graph (see info.txt for functional groups but 940 - 1230 seems best)
-WN_low = 940
-WN_high = 1230
+# choose wavenumber range to integrate over for bar graph
+WN_group = 1
 
+if WN_group == 1: # (Si-O-Si): more cure --> HIGHER signal
+    WN_low = 715
+    WN_high = 830
+    groupname = 'Si-O-Si'
+elif WN_group == 2: # (Si-O-Si): more cure --> HIGHER signal
+    WN_low = 940
+    WN_high = 1230
+    groupname = 'Si-O-Si'
+elif WN_group == 3: # silane (Si-H): more cure --> LOWER signal
+    WN_low = 2290
+    WN_high = 2390
+    groupname = 'Si-H'
+elif WN_group == 4: # (-CH2- and -CH3): more cure --> SAME signal (for checking if internal standards are changing)
+    WN_low = 2900
+    WN_high = 2970
+    groupname = 'CH2 + CH3'
+elif WN_group == 5: # vinyl (CH=CH2) asym.: more cure --> LOWER signal (often so small, gets lost to baseline subtraction)
+    WN_low = 3060
+    WN_high = 3080
+    groupname = 'vinyl'
+    
 # select type of plot to show (true = scatter, false = bar)
 plotScatter = False
 
 # matplot manual formatting/scaling values
-manual_y = True
-ymin = -2.5
-ymax = 2.5
-xmin = 900
-xmax = 1300
+manual_y = False
+ymin = -50
+ymax = 65
+xmin = 400
+xmax = 3500
 width = 0.8 # primary bar plot bar width
-plotSize = 10 # size of dots in scatterplot
+plotSize = 1 # size of dots in scatterplot
 
-# assign colors for differentiating overlapping spectra in scatterplots (currently alternates between 6 color-blind-friendly colors)
+# assign control number (loop will average over this number of initial areas for control %change-from value)
+control_number = 10
+
+# assign colors for differentiating overlapping spectra in scatterplots (currently cycles across custom contrast gradient)
 colorlist = ['#cd6155', '#ec7063', '#af7ac5', '#a569bd', '#5499c7', '#5dade2', '#48c9b0', '#45b39d', '#52be80', '#58d68d', '#f4d03f', '#f5b041'] #'eb984e', '#dc7633', '#f0f3f4', '#cacfd2', '#aab7b8', '#99a3a4', '#5d6d7e', '#566573']#['#d55e00', '#cc79a7', '#0072b2', '#f0e442', '#009e73', '#24ff24','#000000","#004949","#009292","#ff6db6","#ffb6db","#490092","#006ddb","#b66dff","#6db6ff","#b6dbff","#920000","#924900","#db6d00","#24ff24","#ffff6d]
 colorlength = len(colorlist)
 
@@ -52,6 +76,7 @@ df_IR_total_abs = df_IR_total
 namearray = []
 areaarray = []
 changearray = []
+area_control = 0
 colorcount = colorlength # start at max value for modulo loop count
 ax = plt.gca() # define constant axis for iterable additions
 
@@ -59,6 +84,7 @@ ax = plt.gca() # define constant axis for iterable additions
 index_low = 0
 index_high = 0
 index_normal_CH = 0
+index_normal_CH_high = 0
 index_baseline_low = 0
 index_baseline_high = 0
 for item in WN_array:
@@ -66,10 +92,10 @@ for item in WN_array:
         index_low += 1
     if item < WN_high:
         index_high += 1
-    if item < WN_high:
-        index_high += 1
     if item < WN_normal_CH:
         index_normal_CH += 1
+    if item < WN_normal_CH_high:
+        index_normal_CH_high += 1
     if item < WN_baseline_low:
         index_baseline_low += 1
     if item < WN_baseline_high:
@@ -80,8 +106,8 @@ for file in filelist:
     columnname = file[0:-4] # extract column name (slicing off '.csv' from filename)
     df_temp = pd.read_csv(file, names = ['wavenumber', columnname]) # temp dataframe with csv
     normal_temp = df_temp.iloc[index_normal_CH][columnname] # signal value for current csv at normalization index
-    #baseline_temp = df_temp.iloc[index_baseline_low:index_baseline_high][columnname].mean(axis = 0) # baseline correction value to subtract
-    baseline_temp = df_temp.iloc[index_baseline_low][columnname] # baseline correction value to subtract
+    baseline_temp = df_temp.iloc[index_baseline_low:index_baseline_high][columnname].mean(axis = 0) # baseline correction value to subtract
+    #baseline_temp = df_temp.iloc[index_baseline_low][columnname] # baseline correction value to subtract (legacy - keeping in case average method above breaks)
 
     # transmittance-to-absorbance conversion (on condition that it is not already in absorbance)
     if isAbs == False:
@@ -89,12 +115,8 @@ for file in filelist:
         df_temp[columnname] += 1e-10 #bandaid for 'log of 0' errors
         df_temp[columnname] = np.log10(df_temp[columnname]) * -1
         
-    # baseline subtraction # broken for transmittance for now, come back to
-    #df_temp[columnname] -= baseline_temp
-    
-    #print(df_temp)
-    print(index_baseline_high)
-    print(df_temp.iloc[index_baseline_high][columnname])
+    # baseline subtraction (breaks sometimes and makes values negative?)
+    df_temp[columnname] -= baseline_temp
     
     # normalization
     df_temp[columnname] /= normal_temp 
@@ -107,9 +129,6 @@ for file in filelist:
         df_temp.plot(kind = 'scatter', x = 'wavenumber', y = columnname, s = plotSize, c = colorlist[colorcount % colorlength], label = columnname, ax = ax)
     colorcount += 1 # out of conditional because also serves as loop counter below
     
-    # create array of names for bar graph x labels
-    namearray.append(columnname)
-    
     # peak integration, baseline subtraction, and array collection of values for bar graph (ty Nate and Sarah)
     if plotScatter == False:
         abs_array = np.array(df_temp[columnname])
@@ -118,13 +137,19 @@ for file in filelist:
         b = abs_array[index_low] - m*WN_array[index_low]
         baseline_y = np.array(m*WN_array[index_low:index_high] + b)
         baseline_area = simps(baseline_y, WN_array[index_low:index_high])
+        namearray.append(columnname)
         areaarray.append(area - baseline_area)
-        
-        # second bar graph for % change values (starting with checking if first time through loop for control value)
-        if colorcount == colorlength + 1:
-            area_control = (area - baseline_area)
-        changearray.append(100 * ((area - baseline_area) - area_control)/area_control)
 
+        
+        # find % change values to populate second bar graph (starting with checking if first time through loop for control value)
+        if colorcount <= colorlength + control_number:
+            area_control += (area - baseline_area)
+            changearray.append(0)
+        else:    
+            changearray.append(100 * ((area - baseline_area) - area_control)/area_control)
+
+        if colorcount == colorlength + control_number:
+            area_control /= control_number
 # create scatterplot
 if plotScatter == True:
     if manual_y == True:
@@ -134,10 +159,10 @@ if plotScatter == True:
     plt.xlabel(x_label)
     y_label = 'absorbance (normalized)'
     plt.ylabel(y_label)
+    plt.title("{} IR spectra from {}-{} cm-1".format(os.path.basename(os.path.normpath(readpath)), xmin, xmax)) # uses folder name as plot title
 
 # create bar graph
 if plotScatter == False:
-    #areaarray -= areaarray[0] # bandaid for too broad a y scale when all values are similar, make "% change" an option eventually
     if manual_y == True:
         plt.ylim((ymin, ymax))
     plt.bar(namearray, areaarray, width = width, color = 'b', label = 'Integrated Signals')
@@ -145,14 +170,13 @@ if plotScatter == False:
     y_label = 'integrated signal' #('integrated signal from {WN_low} cm-1 to {WN_high} cm-1')
     plt.ylabel(y_label)
     plt.xticks(rotation = 45)
+    plt.title("{} integrated over {}-{} cm-1 ({})".format(os.path.basename(os.path.normpath(readpath)), WN_low, WN_high, groupname)) # uses folder name as plot title
 
 # global plot formatting and printing
 plt.legend()
-plt.title("{} integrated over {}-{} cm-1".format(os.path.basename(os.path.normpath(readpath)), WN_low, WN_high)) # uses folder name as plot title
 plt.show()
 
 # export (arrays to DF to CSV)
 if willExport == True:
-    df_export = pd.DataFrame({"sample (cor./norm.)" : namearray, "area" : areaarray})
-    df_export.to_csv(output, index = False)
-    
+    df_export = pd.DataFrame({"sample (cor./norm.)" : namearray, "area" : areaarray, "pct change" : changearray})
+    df_export.to_csv(writepath, index = False)
