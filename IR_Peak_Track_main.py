@@ -7,7 +7,7 @@ from scipy.integrate import simps
 import glob, os
 
 # assign file paths/names
-readpath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\220509_SarahIR'
+readpath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\220504_808nm_5A_5e-5cbPDMS'
 writepath = r'C:\Users\taekw\Desktop\1_PythonScripts\IRPeakExtract\CSVs\Output\220504_808nm_5A_5e-5cbPDMS.csv'
 output = '220504_808nm_5A_5e-5cbPDMS.csv'
 willExport = False
@@ -16,31 +16,31 @@ os.chdir(readpath) #change working directory to folder with CSVs of interest
 filelist = sorted(glob.glob('*.csv')) #make list of names of csvs from readpath directory  
 
 # normalization and baseline correction wavenumbers
-WN_normal_CH = 2960
-WN_normal_CH_high = 3000
+WN_normal_CH_low = 2957
+WN_normal_CH_high = 2967
 WN_baseline_low = 3400 
 WN_baseline_high = 3600
 
 # choose wavenumber range to integrate over for bar graph
-WN_group = 1
+WN_group = 5
 
-if WN_group == 1: # (Si-O-Si): more cure --> HIGHER signal
+if WN_group == 1: # (Si-O-Si?): more cure --> ? signal (this and 2 need more thinking but )
     WN_low = 715
     WN_high = 830
     groupname = 'Si-O-Si'
-elif WN_group == 2: # (Si-O-Si): more cure --> HIGHER signal
+elif WN_group == 2: # (Si-O-Si): more cure --> ? signal (this and 1 need more thinking)
     WN_low = 940
     WN_high = 1230
     groupname = 'Si-O-Si'
-elif WN_group == 3: # silane (Si-H): more cure --> LOWER signal
+elif WN_group == 3: # silane (Si-H): more cure --> LOWER signal (often very small with ATR)
     WN_low = 2290
     WN_high = 2390
     groupname = 'Si-H'
 elif WN_group == 4: # (-CH2- and -CH3): more cure --> SAME signal (for checking if internal standards are changing)
     WN_low = 2900
     WN_high = 2970
-    groupname = 'CH2 + CH3'
-elif WN_group == 5: # vinyl (CH=CH2) asym.: more cure --> LOWER signal (often so small, gets lost to baseline subtraction)
+    groupname = 'CH3'
+elif WN_group == 5: # vinyl (CH=CH2) asym.: more cure --> LOWER signal (often very small with ATR)
     WN_low = 3060
     WN_high = 3080
     groupname = 'vinyl'
@@ -50,15 +50,15 @@ plotScatter = False
 
 # matplot manual formatting/scaling values
 manual_y = False
-ymin = -30
-ymax = 10
-xmin = 400
-xmax = 3500
+ymin = -1
+ymax = 1
+xmin = 300
+xmax = 4000
 width = 0.8 # primary bar plot bar width
 plotSize = 5 # size of dots in scatterplot
 
 # assign control number (loop will average over this number of initial areas for control %change-from value)
-control_number = 0
+control_number = 10
 
 # assign colors for differentiating overlapping spectra in scatterplots (currently cycles across custom contrast gradient)
 colorlist = ['#cd6155', '#ec7063', '#af7ac5', '#a569bd', '#5499c7', '#5dade2', '#48c9b0', '#45b39d', '#52be80', '#58d68d', '#f4d03f', '#f5b041'] #'eb984e', '#dc7633', '#f0f3f4', '#cacfd2', '#aab7b8', '#99a3a4', '#5d6d7e', '#566573']#['#d55e00', '#cc79a7', '#0072b2', '#f0e442', '#009e73', '#24ff24','#000000","#004949","#009292","#ff6db6","#ffb6db","#490092","#006ddb","#b66dff","#6db6ff","#b6dbff","#920000","#924900","#db6d00","#24ff24","#ffff6d]
@@ -83,7 +83,7 @@ ax = plt.gca() # define constant axis for iterable additions
 # find indices that correspond to integration bounding and normalization wavenumbers so they can be referenced directly
 index_low = 0
 index_high = 0
-index_normal_CH = 0
+index_normal_CH_low = 0
 index_normal_CH_high = 0
 index_baseline_low = 0
 index_baseline_high = 0
@@ -92,8 +92,8 @@ for item in WN_array:
         index_low += 1
     if item < WN_high:
         index_high += 1
-    if item < WN_normal_CH:
-        index_normal_CH += 1
+    if item < WN_normal_CH_low:
+        index_normal_CH_low += 1
     if item < WN_normal_CH_high:
         index_normal_CH_high += 1
     if item < WN_baseline_low:
@@ -105,9 +105,6 @@ for item in WN_array:
 for file in filelist:     
     columnname = file[0:-4] # extract column name (slicing off '.csv' from filename)
     df_temp = pd.read_csv(file, names = ['wavenumber', columnname]) # temp dataframe with csv
-    normal_temp = df_temp.iloc[index_normal_CH][columnname] # signal value for current csv at normalization index
-    baseline_temp = df_temp.iloc[index_baseline_low:index_baseline_high][columnname].mean(axis = 0) # baseline correction value to subtract
-    #baseline_temp = df_temp.iloc[index_baseline_low][columnname] # baseline correction value to subtract (legacy - keeping in case average method above breaks)
 
     # transmittance-to-absorbance conversion (on condition that it is not already in absorbance)
     if isAbs == False:
@@ -116,9 +113,11 @@ for file in filelist:
         df_temp[columnname] = np.log10(df_temp[columnname]) * -1
         
     # baseline subtraction (breaks sometimes and makes values negative?)
+    baseline_temp = df_temp.iloc[index_baseline_low:index_baseline_high][columnname].mean(axis = 0) # baseline correction value to subtract
     df_temp[columnname] -= baseline_temp
-    
+
     # normalization
+    normal_temp = df_temp.iloc[index_normal_CH_low:index_normal_CH_high][columnname].mean(axis = 0) # signal value for current csv at normalization index
     df_temp[columnname] /= normal_temp 
     
     # add current signals column to total dataframe
@@ -150,6 +149,7 @@ for file in filelist:
 
         if colorcount == colorlength + control_number:
             area_control /= control_number
+
 # create scatterplot
 if plotScatter == True:
     if manual_y == True:
